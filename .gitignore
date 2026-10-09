@@ -1,0 +1,36 @@
+.DS_Store
+
+# Local build outputs
+.build/
+DerivedData/
+build/
+
+# Xcode user data
+xcuserdata/
+*.xcuserstate
+
+# macOS app bundles produced locally
+*.app
+*.zip
+
+# C build outputs
+*.o
+tbreceiver
+
+# C test outputs
+test_net_parser
+test_audio_ring
+test_decoder_failures
+test_session_auth
+test_session_gate
+*.dSYM/
+test_control_send
+
+test_display_profile
+
+# Local regression outputs
+test_receiver_identity
+test_input_permissions
+test_receiver_debug
+__pycache__/
+*.pyc

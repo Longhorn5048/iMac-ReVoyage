@@ -1,0 +1,26 @@
+name: ReVoyage Distribution Verification
+on:
+  push:
+    branches: [main, 3.1-maint, 3.2-dev, dev-3.3.0, 'imac-revoyage/**', 'codex/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  distribution:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install build tools
+        run: brew install cmake nasm pkgconf jq xcodegen
+      - name: Build complete current-source distribution
+        run: scripts/build_distribution.sh
+      - name: Run core reliability checks
+        run: scripts/check_distribution.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ReVoyage-Preview
+          path: |
+            build/iMac-ReVoyage-Preview.zip
+            build/iMac-ReVoyage-Preview.zip.sha256
+          retention-days: 7

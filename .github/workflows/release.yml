@@ -1,0 +1,46 @@
+name: ReVoyage Alpha Release Draft
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+jobs:
+  distribution:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install build tools
+        run: brew install cmake nasm pkgconf jq xcodegen
+      - name: Build and verify the same distribution as CI
+        run: |
+          scripts/build_distribution.sh
+          scripts/check_distribution.sh
+      - uses: actions/attest@v4
+        with:
+          subject-path: build/iMac-ReVoyage-Preview.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ReVoyage-Preview
+          path: |
+            build/iMac-ReVoyage-Preview.zip
+            build/iMac-ReVoyage-Preview.zip.sha256
+          retention-days: 1
+  draft:
+    needs: distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
+        with:
+          name: ReVoyage-Preview
+          path: artifacts
+      - name: Create reviewable preview draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" artifacts/* \
+            --title "iMac ReVoyage $RELEASE_TAG (Alpha)" \
+            --draft --prerelease --generate-notes
