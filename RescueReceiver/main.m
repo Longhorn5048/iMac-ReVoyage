@@ -532,7 +532,13 @@ static NSString * const RVNoSignalStandbyKey = @"NoSignalDisplayOffSeconds";
         now - issued.unsignedLongLongValue >= RV_POWER_REQUEST_TIMEOUT_MS) return;
     self.powerRequestID = requestID;
     rv_display_power_set_manual_off(&_signalState, !on.boolValue);
-    if (on.boolValue) self.holdingDisplayAwake = NO; /* Explicit wake must always declare activity. */
+    if (on.boolValue) {
+        self.holdingDisplayAwake = NO; /* Explicit wake must always declare activity. */
+        /* It also restarts the no-signal standby countdown: the picture it
+         * announces has not arrived yet. */
+        self.noSignalSinceMs = now ? now : 1;
+        self.standbyRequested = NO;
+    }
     [self updateVideoPresentation:self.showingVideo];
     if (on.boolValue) {
         [self replyToPowerRequest:requestID displayOn:YES accepted:self.holdingDisplayAwake];
