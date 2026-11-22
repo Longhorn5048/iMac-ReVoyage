@@ -471,8 +471,10 @@ static void tb_disp_rebuild_status_texture(struct tb_display *d,
     tb_disp_draw_text(ctx, tb_i18n_get("receiver.ui.permissions"), section_font, 15, outer_x + 20.0, permissions_top - 28.0, 0.54, 0.62, 0.76);
     tb_disp_draw_text(ctx, permissions, body_font, 20, outer_x + 20.0, permissions_top - 62.0, 0.94, 0.96, 0.99);
 
-    tb_disp_draw_text(ctx, tb_i18n_get("receiver.ui.help_1"), body_font, 17, 72, 108, 0.76, 0.80, 0.88);
-    tb_disp_draw_text(ctx, tb_i18n_get("receiver.ui.help_4"), body_font, 17, 72, 78, 0.76, 0.80, 0.88);
+    /* Hints sit at the bottom, but never climb into the cards of a short window. */
+    const CGFloat hint_y = fmin(108.0, permissions_top - card_h - 34.0);
+    tb_disp_draw_text(ctx, tb_i18n_get("receiver.ui.help_1"), body_font, 17, 72, hint_y, 0.76, 0.80, 0.88);
+    tb_disp_draw_text(ctx, tb_i18n_get("receiver.ui.help_4"), body_font, 17, 72, hint_y - 30.0, 0.76, 0.80, 0.88);
     }
 
     CGContextRelease(ctx);
