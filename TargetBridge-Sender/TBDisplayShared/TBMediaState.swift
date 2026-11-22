@@ -87,9 +87,10 @@ enum TBMediaEndpointStatus: String, CaseIterable, Sendable {
     }
 
     /// Speakers: Sender audio played by the iMac through the virtual output device.
-    static func speaker(installed: Bool, sessionConnected: Bool, selectedAsOutput: Bool) -> Self {
+    /// `audioEnabled`: a connected session has its sound switch on.
+    static func speaker(installed: Bool, sessionConnected: Bool, audioEnabled: Bool, selectedAsOutput: Bool) -> Self {
         if !installed { return .notInstalled }
         if !sessionConnected { return .disconnected }
-        return selectedAsOutput ? .active : .inactive
+        return audioEnabled && selectedAsOutput ? .active : .inactive
     }
 }

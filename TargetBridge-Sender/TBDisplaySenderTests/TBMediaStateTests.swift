@@ -47,9 +47,13 @@ final class TBMediaStateTests: XCTestCase {
     }
 
     func testSpeakerEndpointStatus() {
-        XCTAssertEqual(TBMediaEndpointStatus.speaker(installed: false, sessionConnected: true, selectedAsOutput: true), .notInstalled)
-        XCTAssertEqual(TBMediaEndpointStatus.speaker(installed: true, sessionConnected: false, selectedAsOutput: true), .disconnected)
-        XCTAssertEqual(TBMediaEndpointStatus.speaker(installed: true, sessionConnected: true, selectedAsOutput: false), .inactive)
-        XCTAssertEqual(TBMediaEndpointStatus.speaker(installed: true, sessionConnected: true, selectedAsOutput: true), .active)
+        func status(installed: Bool = true, connected: Bool = true, audio: Bool = true, selected: Bool = true) -> TBMediaEndpointStatus {
+            .speaker(installed: installed, sessionConnected: connected, audioEnabled: audio, selectedAsOutput: selected)
+        }
+        XCTAssertEqual(status(installed: false), .notInstalled)
+        XCTAssertEqual(status(connected: false), .disconnected)
+        XCTAssertEqual(status(selected: false), .inactive)
+        XCTAssertEqual(status(audio: false), .inactive)
+        XCTAssertEqual(status(), .active)
     }
 }

@@ -179,7 +179,9 @@ struct TBDisplaySenderSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                TBMediaSettingsView(language: service.language, sessionConnected: service.anyConnected)
+                TBMediaSettingsView(
+                    language: service.language, sessionConnected: service.anyConnected,
+                    sessionAudioEnabled: service.sessions.contains { ($0.isConnected || $0.isStreaming) && $0.audioEnabled })
 
                 settingsSection(title: addonsTitle) {
                     Text(addonsSubtitle)

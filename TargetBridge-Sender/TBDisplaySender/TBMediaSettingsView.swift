@@ -3,12 +3,13 @@ import SwiftUI
 struct TBMediaSettingsView: View {
     let language: TBDisplaySenderLanguage
     var sessionConnected = false
+    var sessionAudioEnabled = false
     var body: some View {
         SurfaceCard {
             VStack(alignment: .leading, spacing: 12) {
                 Text(TBDisplaySenderL10n.text("sender.media.title", language)).font(.headline)
                 Text(TBDisplaySenderL10n.text("sender.media.hint", language)).font(.footnote).foregroundStyle(.secondary)
-                TBMediaEndpointSummary(language: language, sessionConnected: sessionConnected)
+                TBMediaEndpointSummary(language: language, sessionConnected: sessionConnected, sessionAudioEnabled: sessionAudioEnabled)
                 TBMediaConnectionSettings(language: language)
                 TBMediaCaptureSettings(language: language)
                 TBMediaInstallationSettings(language: language)
@@ -25,6 +26,7 @@ private struct TBMediaEndpointSummary: View {
     }
     let language: TBDisplaySenderLanguage
     let sessionConnected: Bool
+    let sessionAudioEnabled: Bool
     @State private var bridge = TBMediaBridge.shared
     @State private var virtualDevices = TBVirtualDevices.shared
     private func text(_ key: String) -> String { TBDisplaySenderL10n.text("sender.media." + key, language) }
@@ -40,7 +42,7 @@ private struct TBMediaEndpointSummary: View {
                 deviceCount: bridge.microphones.count, permission: bridge.microphonePermission,
                 active: bridge.microphoneID != nil && !bridge.requestPending)),
             Row(id: "speaker", status: .speaker(
-                installed: virtualDevices.speakerInstalled, sessionConnected: sessionConnected,
+                installed: virtualDevices.speakerInstalled, sessionConnected: sessionConnected, audioEnabled: sessionAudioEnabled,
                 selectedAsOutput: virtualDevices.speakerSelected))
         ]
     }
