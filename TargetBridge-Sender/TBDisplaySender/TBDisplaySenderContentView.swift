@@ -8,7 +8,6 @@ struct TBDisplaySenderContentView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 headerCard
-                controlDeck
 
                 ForEach(service.sessions) { session in
                     TBDisplaySenderSessionCard(service: service, session: session)
@@ -48,100 +47,49 @@ struct TBDisplaySenderContentView: View {
 
     private var headerCard: some View {
         SurfaceCard {
-            HStack(alignment: .top, spacing: 16) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.green.opacity(0.28),
-                                    Color.cyan.opacity(0.12)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    Image(systemName: "display.2")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.92))
-                }
-                .frame(width: 58, height: 58)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(TBDisplaySenderL10n.appName(service.language))
+                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                        Text(TBDisplaySenderL10n.appSubtitle(service.language))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(TBDisplaySenderL10n.appName(service.language))
-                        .font(.system(size: 31, weight: .bold, design: .rounded))
-                    Text(TBDisplaySenderL10n.appSubtitle(service.language))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                    Spacer(minLength: 16)
 
-                Spacer(minLength: 16)
-
-                VStack(alignment: .trailing, spacing: 8) {
                     statusChip(
                         service.summaryStatusText(),
                         tint: service.anyStreaming ? .green : .secondary
                     )
+                }
+
+                HStack(alignment: .center, spacing: 10) {
                     Text(service.localInterfaceSummaryText)
                         .font(.system(.footnote, design: .monospaced))
                         .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.trailing)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Button(TBDisplaySenderL10n.addSessionButton(service.language)) {
+                        service.addSession()
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button(TBDisplaySenderL10n.refreshIPButton(service.language)) {
+                        service.refreshLocalInterfaces()
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(TBDisplaySenderL10n.stopAllButton(service.language)) {
+                        service.stopAll()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!service.anyConnected)
                 }
             }
         }
-    }
-
-    private var controlDeck: some View {
-        SurfaceCard {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        sectionHeading(TBDisplaySenderL10n.connectionGroup(service.language))
-                        Text(TBDisplaySenderL10n.multiSessionHint(service.language))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    HStack(spacing: 10) {
-                        Button(TBDisplaySenderL10n.addSessionButton(service.language)) {
-                            service.addSession()
-                        }
-                        .buttonStyle(.borderedProminent)
-
-                        Button(TBDisplaySenderL10n.refreshIPButton(service.language)) {
-                            service.refreshLocalInterfaces()
-                        }
-                        .buttonStyle(.bordered)
-
-                        Button(TBDisplaySenderL10n.stopAllButton(service.language)) {
-                            service.stopAll()
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(!service.anyConnected)
-                    }
-                }
-
-                SurfaceSubcard {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(TBDisplaySenderL10n.availableLocalInterfaces(service.language))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Text(service.localInterfaceSummaryText)
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
-                    }
-                }
-            }
-        }
-    }
-
-    private func sectionHeading(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(.system(.caption, design: .rounded, weight: .bold))
-            .tracking(1.1)
-            .foregroundStyle(.secondary)
     }
 
     private func statusChip(_ text: String, tint: Color) -> some View {
@@ -205,7 +153,6 @@ private struct TBDisplaySenderSessionCard: View {
                 if session.isConnected && session.audioEnabled {
                     volumeCard
                 }
-                monitorDetailsCard
             }
         }
         .sheet(isPresented: $showingSessionSettings) {
@@ -287,22 +234,6 @@ private struct TBDisplaySenderSessionCard: View {
                 accent: session.isStreaming ? .green : .secondary
             )
         }
-    }
-
-    private var monitorDetailsCard: some View {
-        SurfaceSubcard {
-            VStack(alignment: .leading, spacing: 10) {
-                sectionHeading(sessionMonitorTitle)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    infoRow(TBDisplaySenderL10n.receiverLabel(service.language), session.receiverPanelText)
-                    infoRow(TBDisplaySenderL10n.virtualDisplayLabel(service.language), session.virtualDisplayText)
-                    infoRow(TBDisplaySenderL10n.streamLabel(service.language), session.streamResolutionText)
-                    infoRow(TBDisplaySenderL10n.fpsLabel(service.language), "\(session.senderFPS)")
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var brightnessCard: some View {
@@ -513,16 +444,6 @@ private struct TBDisplaySenderSessionCard: View {
         }
     }
 
-    private var sessionMonitorTitle: String {
-        switch service.language {
-        case .italian: return "Sessione monitor"
-        case .english: return "Monitor Session"
-        case .german: return "Monitor-Sitzung"
-        case .french: return "Moniteur de session"
-        case .chinese: return "显示会话"
-        }
-    }
-
     private var liveTitle: String {
         TBDisplaySenderL10n.statusChipLive(service.language)
     }
@@ -533,19 +454,6 @@ private struct TBDisplaySenderSessionCard: View {
 
     private var idleTitle: String {
         TBDisplaySenderL10n.statusChipIdle(service.language)
-    }
-
-    private func infoRow(_ label: String, _ value: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Text(label)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 138, alignment: .leading)
-            Text(value)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
     }
 }
 
@@ -825,6 +733,7 @@ private struct TBDisplaySenderSessionSettingsSheet: View {
                             Divider().overlay(Color.white.opacity(0.08))
 
                             VStack(alignment: .leading, spacing: 8) {
+                                infoRow(TBDisplaySenderL10n.virtualDisplayLabel(service.language), session.virtualDisplayText)
                                 infoRow("Capture", session.captureDisplayText)
                                 infoRow("State", session.displayStateText)
                             }

@@ -423,7 +423,7 @@ static void tb_disp_rebuild_status_texture(struct tb_display *d,
                                   38.0 * scale,
                                   0.075, 0.09, 0.12, 1.0);
         tb_disp_draw_brand_icon(ctx, icon_x, icon_y, icon_size);
-        tb_disp_draw_text(ctx, "TargetBridge", title_font, 42.0 * scale,
+        tb_disp_draw_text(ctx, "iMac ReVoyage", title_font, 42.0 * scale,
                           center_x - 156.0 * scale, icon_y + icon_size + 74.0 * scale,
                           0.95, 0.98, 0.97);
         tb_disp_draw_text(ctx, "RECEIVER", mono_bold_font, 15.0 * scale,
@@ -611,7 +611,7 @@ struct tb_display *tb_disp_create(int fullscreen, int appliance) {
     }
     Uint32 flags = SDL_WINDOW_HIDDEN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE;
 
-    d->win = SDL_CreateWindow("TargetBridge Receiver",
+    d->win = SDL_CreateWindow("iMac ReVoyage Receiver",
                               SDL_WINDOWPOS_CENTERED_DISPLAY(target_index), SDL_WINDOWPOS_CENTERED_DISPLAY(target_index),
                               980, 620, flags);
     if (!d->win) {
@@ -1675,7 +1675,7 @@ void tb_disp_render_connecting(struct tb_display *d) {
                                        drawable_w, drawable_h, 1);
     }
 
-    SDL_SetWindowTitle(d->win, "TargetBridge Receiver — Connecting");
+    SDL_SetWindowTitle(d->win, "iMac ReVoyage Receiver — Connecting");
     SDL_RenderClear(d->ren);
     if (d->status_tex) SDL_RenderCopy(d->ren, d->status_tex, NULL, NULL);
     tb_disp_draw_connecting_spinner(d, drawable_w, drawable_h);
