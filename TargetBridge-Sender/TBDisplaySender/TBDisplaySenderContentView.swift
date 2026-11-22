@@ -734,8 +734,8 @@ private struct TBDisplaySenderSessionSettingsSheet: View {
 
                             VStack(alignment: .leading, spacing: 8) {
                                 infoRow(TBDisplaySenderL10n.virtualDisplayLabel(service.language), session.virtualDisplayText)
-                                infoRow("Capture", session.captureDisplayText)
-                                infoRow("State", session.displayStateText)
+                                infoRow(TBDisplaySenderL10n.captureLabel(service.language), session.captureDisplayText)
+                                infoRow(TBDisplaySenderL10n.stateLabel(service.language), session.displayStateText)
                             }
                         }
                     }

@@ -155,10 +155,6 @@ enum TBDisplaySenderL10n {
         text("sender.cable_test.none", language)
     }
 
-    static func connectionGroup(_ language: TBDisplaySenderLanguage) -> String {
-        text("sender.section.connection", language)
-    }
-
     static func localTBIP(_ language: TBDisplaySenderLanguage) -> String {
         text("sender.label.local_tb_ip", language)
     }
@@ -184,16 +180,6 @@ enum TBDisplaySenderL10n {
         case .german: return "Lokale Interface-IP"
         case .french: return "IP de l’interface locale"
         case .chinese: return "本地接口 IP"
-        }
-    }
-
-    static func availableLocalInterfaces(_ language: TBDisplaySenderLanguage) -> String {
-        switch language {
-        case .italian: return "Interfacce locali disponibili"
-        case .english: return "Available local interfaces"
-        case .german: return "Verfügbare lokale Schnittstellen"
-        case .french: return "Interfaces locales disponibles"
-        case .chinese: return "可用本地接口"
         }
     }
 
@@ -280,10 +266,6 @@ enum TBDisplaySenderL10n {
         text("sender.stream_hint_2", language)
     }
 
-    static func multiSessionHint(_ language: TBDisplaySenderLanguage) -> String {
-        text("sender.multi_session_hint", language)
-    }
-
     static func discoveryHint(_ language: TBDisplaySenderLanguage) -> String {
         text("sender.discovery_hint", language)
     }
@@ -292,20 +274,8 @@ enum TBDisplaySenderL10n {
         text("sender.section.monitor_session", language)
     }
 
-    static func receiverLabel(_ language: TBDisplaySenderLanguage) -> String {
-        text("sender.label.receiver", language)
-    }
-
     static func virtualDisplayLabel(_ language: TBDisplaySenderLanguage) -> String {
         text("sender.label.virtual_display", language)
-    }
-
-    static func streamLabel(_ language: TBDisplaySenderLanguage) -> String {
-        text("sender.label.stream", language)
-    }
-
-    static func fpsLabel(_ language: TBDisplaySenderLanguage) -> String {
-        text("sender.label.sender_fps", language)
     }
 
     static func captureLabel(_ language: TBDisplaySenderLanguage) -> String {
