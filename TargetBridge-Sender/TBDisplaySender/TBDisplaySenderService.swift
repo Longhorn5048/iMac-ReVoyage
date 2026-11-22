@@ -3862,8 +3862,29 @@ final class TBDisplaySenderSession: NSObject, ObservableObject, Identifiable, @u
         sendSenderPowerState(awake: false, allowSleep: allowSleep)
     }
 
+    /// False only when every online display reports asleep, as in a dark wake.
+    private static func anyDisplayAwake() -> Bool {
+        var count: UInt32 = 0
+        guard CGGetOnlineDisplayList(0, nil, &count) == .success, count > 0 else { return true }
+        var displays = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        guard CGGetOnlineDisplayList(count, &displays, &count) == .success else { return true }
+        return displays.prefix(Int(count)).contains { CGDisplayIsAsleep($0) == 0 }
+    }
+
     private func handleSenderWake(system: Bool) {
-        guard sleepState.wake(system: system) else { return }
+        let displaysAwake = !system || Self.anyDisplayAwake()
+        if system && !displaysAwake {
+            // The screen notification may already have passed; look again
+            // before concluding that this was only a background wake.
+            Task { @MainActor [weak self] in
+                for delay in [1.0, 2.0, 4.0] {
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    guard let self, self.sleepState.screensSleeping, !self.sleepState.systemSleeping else { return }
+                    if Self.anyDisplayAwake() { self.handleSenderWake(system: false); return }
+                }
+            }
+        }
+        guard sleepState.wake(system: system, displaysAwake: displaysAwake) else { return }
         guard sleepState.needsResume else { return }
         pipeline?.setSuspended(false)
         audioOutputRouteObserver.refresh()
