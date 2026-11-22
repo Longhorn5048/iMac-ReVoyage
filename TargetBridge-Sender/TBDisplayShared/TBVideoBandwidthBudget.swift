@@ -59,6 +59,11 @@ struct TBVideoSendGate {
     private(set) var needsKeyframe = true
     private var submissions: [UUID: Int] = [:]
 
+    init(maxPackets: Int, maxBytes: Int) {
+        self.maxPackets = maxPackets
+        self.maxBytes = maxBytes
+    }
+
     var pendingPackets: Int { submissions.count }
     var hasCapacity: Bool { pendingPackets < maxPackets && pendingBytes < maxBytes }
 

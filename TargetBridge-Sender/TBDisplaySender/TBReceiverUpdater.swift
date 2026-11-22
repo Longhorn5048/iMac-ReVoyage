@@ -136,7 +136,7 @@ final class TBReceiverUpdater {
                 let requestID = UUID()
                 let response = try await TBReceiverUpdateRequest(host: host, localIP: localIP, package: package, requestID: requestID) { [weak self] fraction in
                     Task { @MainActor [weak self] in
-                        guard let self, phase == .uploading else { return }; progress = fraction
+                        guard let self, self.phase == .uploading else { return }; self.progress = fraction
                     }
                 }.run()
                 guard response.code == 202 else {
