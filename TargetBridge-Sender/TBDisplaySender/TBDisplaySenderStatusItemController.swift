@@ -87,7 +87,7 @@ final class TBDisplaySenderStatusItemController: NSObject {
         guard statusItem == nil else { return }
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = NSImage(systemSymbolName: "display.2", accessibilityDescription: "TargetBridge")
+        item.button?.image = NSImage(systemSymbolName: "display.2", accessibilityDescription: "iMac ReVoyage")
         item.button?.imagePosition = .imageOnly
         item.button?.toolTip = TBDisplaySenderL10n.topBarToolTip(service.language)
 
@@ -116,7 +116,7 @@ final class TBDisplaySenderStatusItemController: NSObject {
     private func rebuildMenuItems(in menu: NSMenu) {
         menu.removeAllItems()
 
-        let titleItem = NSMenuItem(title: "TargetBridge", action: nil, keyEquivalent: "")
+        let titleItem = NSMenuItem(title: "iMac ReVoyage", action: nil, keyEquivalent: "")
         titleItem.isEnabled = false
         menu.addItem(titleItem)
 
