@@ -84,7 +84,20 @@ int tb_virtual_camera_push_jpeg(const uint8_t *bytes,size_t size) {
     status=CMSimpleQueueEnqueue(cameraQueue,sample);if(status!=noErr)CFRelease(sample);return status==noErr?0:1;
     }
 }
-static AudioDeviceID findMicrophone(void) {
+int tb_virtual_camera_present(void) {
+    @autoreleasepool {
+    NSData *devices=cmioProperty(kCMIOObjectSystemObject,kCMIOHardwarePropertyDevices,kCMIOObjectPropertyScopeGlobal);
+    const CMIODeviceID *ids=devices.bytes;
+    for(NSUInteger i=0;i<devices.length/sizeof(CMIODeviceID);i++) {
+        CMIOObjectPropertyAddress a={kCMIODevicePropertyDeviceUID,kCMIOObjectPropertyScopeGlobal,kCMIOObjectPropertyElementMain};
+        CFStringRef uid=NULL;UInt32 size=sizeof(uid);
+        if(CMIOObjectGetPropertyData(ids[i],&a,0,NULL,size,&size,&uid)!=noErr||!uid)continue;
+        BOOL match=CFEqual(uid,CFSTR("re.voyage.imac.camera"));CFRelease(uid);if(match)return 1;
+    }
+    return 0;
+    }
+}
+static AudioDeviceID findAudioDevice(CFStringRef wanted) {
     AudioObjectPropertyAddress list={kAudioHardwarePropertyDevices,kAudioObjectPropertyScopeGlobal,kAudioObjectPropertyElementMain};UInt32 size=0;
     if(AudioObjectGetPropertyDataSize(kAudioObjectSystemObject,&list,0,NULL,&size)!=noErr||size>8192)return 0;
     NSMutableData *data=[NSMutableData dataWithLength:size];
@@ -94,9 +107,20 @@ static AudioDeviceID findMicrophone(void) {
         AudioObjectPropertyAddress a={kAudioDevicePropertyDeviceUID,kAudioObjectPropertyScopeGlobal,kAudioObjectPropertyElementMain};
         CFStringRef uid=NULL;UInt32 bytes=sizeof(uid);
         if(AudioObjectGetPropertyData(ids[i],&a,0,NULL,&bytes,&uid)!=noErr||!uid)continue;
-        BOOL match=CFEqual(uid,CFSTR("re.voyage.imac.microphone"));CFRelease(uid);if(match)return ids[i];
+        BOOL match=CFEqual(uid,wanted);CFRelease(uid);if(match)return ids[i];
     }
     return 0;
+}
+static AudioDeviceID findMicrophone(void) { return findAudioDevice(CFSTR("re.voyage.imac.microphone")); }
+int tb_virtual_microphone_present(void) { @autoreleasepool { return findMicrophone()!=0; } }
+int tb_virtual_speaker_present(void) { @autoreleasepool { return findAudioDevice(CFSTR("re.voyage.imac.speaker"))!=0; } }
+int tb_virtual_speaker_selected(void) {
+    @autoreleasepool {
+    AudioDeviceID speaker=findAudioDevice(CFSTR("re.voyage.imac.speaker"));if(!speaker)return 0;
+    AudioObjectPropertyAddress a={kAudioHardwarePropertyDefaultOutputDevice,kAudioObjectPropertyScopeGlobal,kAudioObjectPropertyElementMain};
+    AudioDeviceID current=0;UInt32 size=sizeof(current);
+    return AudioObjectGetPropertyData(kAudioObjectSystemObject,&a,0,NULL,&size,&current)==noErr&&current==speaker;
+    }
 }
 int tb_virtual_microphone_start(void) {
     @autoreleasepool {

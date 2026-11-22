@@ -323,5 +323,14 @@
   "sender.receiver_update.invalid_request": "更新请求无效，请重新选择安装包。",
   "sender.media.install_speaker": "安装 iMac 扬声器…",
   "sender.media.speaker_hint": "安装后请重启 Mac mini，然后在系统声音输出中选择 ReVoyage — iMac Speakers。选择本机扬声器或耳机时，iMac 不发声。",
+  "sender.media.speaker": "扬声器",
+  "sender.media.endpoint.signing_required": "需要用开发者账号签名的版本才能在本机注册。",
+  "sender.media.endpoint.not_installed": "本机尚未安装虚拟设备。",
+  "sender.media.endpoint.disconnected": "未连接 iMac。",
+  "sender.media.endpoint.unavailable": "iMac 上没有可用的设备。",
+  "sender.media.endpoint.permission_pending": "启用时需要在 iMac 上允许访问。",
+  "sender.media.endpoint.permission_denied": "iMac 上已拒绝访问，请检查其隐私设置。",
+  "sender.media.endpoint.inactive": "已就绪，未启用。",
+  "sender.media.endpoint.active": "正在使用。",
   "sender.media.devices.speaker_restart_required": "iMac 扬声器已安装，请重启 macOS 后在声音输出中选择 ReVoyage — iMac Speakers。"
 }

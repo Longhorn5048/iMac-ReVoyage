@@ -179,7 +179,7 @@ struct TBDisplaySenderSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                TBMediaSettingsView(language: service.language)
+                TBMediaSettingsView(language: service.language, sessionConnected: service.anyConnected)
 
                 settingsSection(title: addonsTitle) {
                     Text(addonsSubtitle)

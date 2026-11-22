@@ -323,5 +323,14 @@
   "sender.receiver_update.invalid_request": "Invalid update request. Please choose the package again.",
   "sender.media.install_speaker": "Install iMac Speakers…",
   "sender.media.speaker_hint": "After installation, restart this Mac and select ReVoyage — iMac Speakers in Sound output. Local speakers and headphones play only on this Mac.",
+  "sender.media.speaker": "Speakers",
+  "sender.media.endpoint.signing_required": "Needs a Developer ID signed build to register on this Mac.",
+  "sender.media.endpoint.not_installed": "Virtual device not installed on this Mac.",
+  "sender.media.endpoint.disconnected": "Not connected to the iMac.",
+  "sender.media.endpoint.unavailable": "The iMac reports no such device.",
+  "sender.media.endpoint.permission_pending": "The iMac will ask for access when you enable it.",
+  "sender.media.endpoint.permission_denied": "Access denied on the iMac. Check its privacy settings.",
+  "sender.media.endpoint.inactive": "Ready, not in use.",
+  "sender.media.endpoint.active": "In use.",
   "sender.media.devices.speaker_restart_required": "iMac speakers installed. Restart macOS, then select ReVoyage — iMac Speakers in Sound output."
 }

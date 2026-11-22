@@ -323,5 +323,14 @@
   "sender.receiver_update.invalid_request": "Ungültige Update-Anfrage. Paket erneut auswählen.",
   "sender.media.install_speaker": "iMac-Lautsprecher installieren…",
   "sender.media.speaker_hint": "Nach der Installation diesen Mac neu starten und ReVoyage — iMac Speakers als Tonausgabe wählen. Lokale Lautsprecher und Kopfhörer spielen nur auf diesem Mac.",
+  "sender.media.speaker": "Lautsprecher",
+  "sender.media.endpoint.signing_required": "Benötigt einen mit Developer ID signierten Build zur Registrierung auf diesem Mac.",
+  "sender.media.endpoint.not_installed": "Virtuelles Gerät ist auf diesem Mac nicht installiert.",
+  "sender.media.endpoint.disconnected": "Nicht mit dem iMac verbunden.",
+  "sender.media.endpoint.unavailable": "Der iMac meldet kein solches Gerät.",
+  "sender.media.endpoint.permission_pending": "Der iMac fragt beim Aktivieren nach dem Zugriff.",
+  "sender.media.endpoint.permission_denied": "Zugriff auf dem iMac verweigert. Prüfe dessen Datenschutzeinstellungen.",
+  "sender.media.endpoint.inactive": "Bereit, nicht in Verwendung.",
+  "sender.media.endpoint.active": "In Verwendung.",
   "sender.media.devices.speaker_restart_required": "iMac-Lautsprecher installiert. macOS neu starten und ReVoyage — iMac Speakers als Tonausgabe wählen."
 }

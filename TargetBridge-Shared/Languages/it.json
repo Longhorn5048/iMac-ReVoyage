@@ -323,5 +323,14 @@
   "sender.receiver_update.invalid_request": "Richiesta non valida. Seleziona nuovamente il pacchetto.",
   "sender.media.install_speaker": "Installa gli altoparlanti iMac…",
   "sender.media.speaker_hint": "Dopo l’installazione, riavvia questo Mac e seleziona ReVoyage — iMac Speakers come uscita audio. Gli altoparlanti locali e le cuffie riproducono solo su questo Mac.",
+  "sender.media.speaker": "Altoparlanti",
+  "sender.media.endpoint.signing_required": "Richiede una build firmata con Developer ID per la registrazione su questo Mac.",
+  "sender.media.endpoint.not_installed": "Dispositivo virtuale non installato su questo Mac.",
+  "sender.media.endpoint.disconnected": "Non connesso all’iMac.",
+  "sender.media.endpoint.unavailable": "L’iMac non segnala alcun dispositivo di questo tipo.",
+  "sender.media.endpoint.permission_pending": "L’iMac chiederà l’accesso quando lo attivi.",
+  "sender.media.endpoint.permission_denied": "Accesso negato sull’iMac. Controlla le impostazioni di privacy.",
+  "sender.media.endpoint.inactive": "Pronto, non in uso.",
+  "sender.media.endpoint.active": "In uso.",
   "sender.media.devices.speaker_restart_required": "Altoparlanti iMac installati. Riavvia macOS e seleziona ReVoyage — iMac Speakers come uscita audio."
 }
