@@ -231,10 +231,19 @@ static void tb_receiver_publish_display_state(struct app *a, uint64_t now) {
     CFNumberRef frame = CFNumberCreate(NULL, kCFNumberSInt64Type, &frame_ms);
     CFStringRef line1 = CFStringCreateWithCString(NULL, a->debug_line1, kCFStringEncodingUTF8);
     CFStringRef line2 = CFStringCreateWithCString(NULL, a->debug_line2, kCFStringEncodingUTF8);
-    const void *keys[] = { CFSTR("frameMs"), CFSTR("manualRescue"), CFSTR("debugVisible"), CFSTR("debugLine1"), CFSTR("debugLine2") };
+    /* The shell shows these on its no-signal page; in appliance mode this
+     * process has no visible window of its own while it waits. */
+    CFStringRef address = CFStringCreateWithCString(NULL, a->tb_ip_text[0] ? a->tb_ip_text : a->net_ip_text, kCFStringEncodingUTF8);
+    CFStringRef language = CFStringCreateWithCString(NULL, tb_i18n_current_language(), kCFStringEncodingUTF8);
+    if (!address) address = CFSTR("");
+    if (!language) language = CFSTR("");
+    const void *keys[] = { CFSTR("frameMs"), CFSTR("manualRescue"), CFSTR("debugVisible"), CFSTR("debugLine1"), CFSTR("debugLine2"),
+        CFSTR("address"), CFSTR("language"), CFSTR("inputMonitoring"), CFSTR("accessibility") };
     const void *values[] = { frame, a->manual_rescue ? kCFBooleanTrue : kCFBooleanFalse,
-        a->debug_visible ? kCFBooleanTrue : kCFBooleanFalse, line1, line2 };
-    CFDictionaryRef info = CFDictionaryCreate(NULL, keys, values, 5,
+        a->debug_visible ? kCFBooleanTrue : kCFBooleanFalse, line1, line2, address, language,
+        a->last_input_monitoring_trusted > 0 ? kCFBooleanTrue : kCFBooleanFalse,
+        a->last_accessibility_trusted > 0 ? kCFBooleanTrue : kCFBooleanFalse };
+    CFDictionaryRef info = CFDictionaryCreate(NULL, keys, values, 9,
         &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
     CFNotificationCenterRef center = CFNotificationCenterGetDistributedCenter();
     CFNotificationCenterPostNotification(
@@ -246,6 +255,7 @@ static void tb_receiver_publish_display_state(struct app *a, uint64_t now) {
     CFRelease(info);
     CFRelease(frame);
     CFRelease(line1); CFRelease(line2);
+    CFRelease(address); CFRelease(language);
     a->display_state_notify_sent = 1;
     a->last_display_state_notify_active = signal;
     a->last_display_state_notify_ms = now;

@@ -3,6 +3,7 @@
 #import <CoreAudio/CoreAudio.h>
 #import <IOKit/pwr_mgt/IOPMLib.h>
 #import "DisplaySignalState.h"
+#import "ShellPresentation.h"
 #import "CaptureDeviceSelection.h"
 #import "../TargetBridge-Shared/DisplayPower.h"
 #import "../TargetBridge-Shared/ReceiverDebug.h"
@@ -25,8 +26,49 @@ static uint64_t RVMonotonicMilliseconds(void) {
     return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)ts.tv_nsec / 1000000ULL;
 }
 
+/* Shell text follows the Receiver's language; only zh has a translation here. */
+static NSString *RVShellText(NSString *key, BOOL chinese) {
+    static NSDictionary<NSString *, NSArray<NSString *> *> *table;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        table = @{
+            @"title_no_signal": @[@"No Signal", @"无信号"],
+            @"waiting_input": @[@"Waiting for HDMI/UVC input…", @"等待 HDMI/UVC 输入…"],
+            @"waiting_any": @[@"Waiting for HDMI or network video…", @"等待 HDMI / 网络画面…"],
+            @"camera_denied": @[@"HDMI Rescue needs camera access", @"HDMI Rescue 需要摄像头权限"],
+            @"waiting_card": @[@"Waiting for an HDMI/UVC capture device…", @"等待可识别的 HDMI/UVC 采集卡…"],
+            @"open_failed": @[@"Cannot open the video device: %@", @"视频设备无法打开：%@"],
+            @"waiting_hdmi": @[@"Waiting for HDMI video…", @"等待 HDMI 画面…"],
+            @"capture_retry": @[@"HDMI capture unavailable, retrying…", @"HDMI 采集暂不可用，正在重试…"],
+            @"capture_interrupted": @[@"HDMI capture interrupted, waiting…", @"HDMI 采集暂时中断，等待恢复…"],
+            @"capture_reconnect": @[@"Reconnecting HDMI video…", @"重新连接 HDMI 画面…"],
+            @"manual_rescue": @[@"Manual Rescue: waiting for HDMI/UVC input… (R returns to the stream)",
+                                @"手动 Rescue：等待 HDMI/UVC 输入…（R 返回串流）"],
+            @"address": @[@"Connect from Sender: %@", @"在 Sender 中连接：%@"],
+            @"hint": @[@"R: HDMI Rescue  ·  P: permissions  ·  Esc twice: iMac desktop",
+                       @"R 切换 HDMI Rescue  ·  P 权限设置  ·  连按两次 Esc 返回 iMac 桌面"],
+            @"exit_confirm": @[@"Press Esc again for the iMac desktop", @"再按一次 Esc 返回 iMac 桌面"],
+            @"toast_rescue": @[@"HDMI Rescue", @"HDMI Rescue"],
+            @"toast_network": @[@"Network stream", @"网络串流"],
+            @"permissions_missing": @[@"Missing permissions: %@  (press P)", @"缺少权限：%@（按 P 处理）"],
+            @"camera": @[@"Camera", @"摄像头"],
+            @"microphone": @[@"Microphone", @"麦克风"],
+            @"input": @[@"Input Monitoring", @"输入监控"],
+            @"accessibility": @[@"Accessibility", @"辅助功能"],
+            @"menu_return": @[@"Return to ReVoyage full screen", @"返回 ReVoyage 全屏"],
+            @"menu_standby": @[@"Turn the display off after 60 s without signal", @"无信号 60 秒后熄屏"],
+            @"menu_permissions": @[@"Open permission settings…", @"打开权限设置…"],
+        };
+    });
+    NSArray<NSString *> *pair = table[key];
+    return pair ? pair[chinese ? 1 : 0] : key;
+}
+
+static NSString * const RVNoSignalStandbyKey = @"NoSignalDisplayOffSeconds";
+
 @interface RescueWindow : NSWindow
 @property(nonatomic, copy) void (^onEscape)(void);
+@property(nonatomic, copy) void (^onPermissions)(void);
 @property(nonatomic, copy) void (^onShortcut)(unsigned int);
 @property(nonatomic) unsigned int shortcutHeld;
 @end
@@ -40,7 +82,10 @@ static uint64_t RVMonotonicMilliseconds(void) {
         if (action && self.onShortcut) self.onShortcut(action);
         return;
     }
-    if (event.keyCode == 53 && self.onEscape) self.onEscape();
+    const BOOL modified = (event.modifierFlags &
+        (NSEventModifierFlagCommand | NSEventModifierFlagOption | NSEventModifierFlagControl)) != 0;
+    if (event.keyCode == 53 && self.onEscape) { if (!event.isARepeat) self.onEscape(); }
+    else if (event.keyCode == 35 && !modified && self.onPermissions) { if (!event.isARepeat) self.onPermissions(); }
     else [super keyDown:event];
 }
 - (void)keyUp:(NSEvent *)event {
@@ -86,6 +131,28 @@ static uint64_t RVMonotonicMilliseconds(void) {
 @property(nonatomic) BOOL manualRescue;
 @property(nonatomic, strong) NSView *debugBar;
 @property(nonatomic, strong) NSArray<NSTextField *> *debugLines;
+@property(nonatomic) enum rv_shell_view shellView;
+@property(nonatomic) uint64_t exitArmedMs;
+@property(nonatomic) uint64_t noSignalSinceMs;
+@property(nonatomic) uint64_t presentationGeneration;
+@property(nonatomic) uint64_t toastGeneration;
+@property(nonatomic) BOOL standbyRequested;
+@property(nonatomic) BOOL permissionPromptPending;
+@property(nonatomic) BOOL returnWhenPermitted;
+@property(nonatomic, strong) NSTextField *titleLabel;
+@property(nonatomic, strong) NSTextField *infoLabel;
+@property(nonatomic, strong) NSTextField *permissionLabel;
+@property(nonatomic, strong) NSTextField *hintLabel;
+@property(nonatomic, strong) NSTextField *toastLabel;
+@property(nonatomic, copy) NSString *statusKey;
+@property(nonatomic, copy) NSString *statusDetail;
+@property(nonatomic, copy) NSString *receiverAddress;
+@property(nonatomic, copy) NSString *receiverLanguage;
+@property(nonatomic, strong) NSNumber *receiverInputMonitoring;
+@property(nonatomic, strong) NSNumber *receiverAccessibility;
+@property(nonatomic, strong) NSMenuItem *returnItem;
+@property(nonatomic, strong) NSMenuItem *standbyItem;
+@property(nonatomic, strong) NSMenuItem *permissionsItem;
 
 @end
 
@@ -108,18 +175,26 @@ static uint64_t RVMonotonicMilliseconds(void) {
     __weak RescueController *weakSelf = self;
     self.window.onEscape = ^{
         RescueController *controller = weakSelf;
+        if (!controller.hdmiFullscreen) return;
+        uint64_t armed = controller.exitArmedMs;
+        const BOOL confirmed = rv_shell_exit_press(&armed, RVMonotonicMilliseconds());
+        controller.exitArmedMs = armed;
+        if (!confirmed) { [controller showToast:[controller text:@"exit_confirm"]]; return; }
         controller.fullscreenDismissed = YES;
         [controller updateVideoPresentation:controller.showingVideo];
     };
+    self.window.onPermissions = ^{ [weakSelf openPermissionSettings:nil]; };
     self.window.onShortcut = ^(unsigned int action) {
         NSString *name = action == RV_RECEIVER_SHORTCUT_DEBUG ? @RV_RECEIVER_DEBUG_TOGGLE_NOTIFICATION : @RV_RECEIVER_RESCUE_TOGGLE_NOTIFICATION;
         [[NSDistributedNotificationCenter defaultCenter] postNotificationName:name object:nil userInfo:nil deliverImmediately:YES];
     };
     self.menuItem = [NSStatusBar.systemStatusBar statusItemWithLength:NSVariableStatusItemLength];
-    self.menuItem.button.title = @"HDMI";
+    self.menuItem.button.title = @"ReVoyage";
     NSMenu *menu = [NSMenu new];
-    NSMenuItem *fullscreen = [menu addItemWithTitle:@"显示 HDMI 全屏（Esc 返回桌面）" action:@selector(showHDMIFullscreen:) keyEquivalent:@""];
-    fullscreen.target = self;
+    self.returnItem = [menu addItemWithTitle:@"" action:@selector(showHDMIFullscreen:) keyEquivalent:@""];
+    self.permissionsItem = [menu addItemWithTitle:@"" action:@selector(openPermissionSettings:) keyEquivalent:@""];
+    self.standbyItem = [menu addItemWithTitle:@"" action:@selector(toggleNoSignalStandby:) keyEquivalent:@""];
+    for (NSMenuItem *item in menu.itemArray) item.target = self;
     self.menuItem.menu = menu;
     self.window.backgroundColor = NSColor.blackColor;
     self.window.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces |
@@ -157,13 +232,16 @@ static uint64_t RVMonotonicMilliseconds(void) {
         suspensionBehavior:NSNotificationSuspensionBehaviorDeliverImmediately];
     rv_display_signal_init(&_signalState);
 
-    self.status = [NSTextField labelWithString:@"等待 HDMI/UVC 输入…"];
-    self.status.textColor = NSColor.whiteColor;
-    self.status.backgroundColor = NSColor.clearColor;
-    self.status.font = [NSFont systemFontOfSize:24 weight:NSFontWeightMedium];
-    self.status.alignment = NSTextAlignmentCenter;
-    self.status.frame = NSMakeRect(0, NSMidY(screen.frame) - 24, NSWidth(screen.frame), 48);
-    [self.window.contentView addSubview:self.status];
+    self.titleLabel = [self shellLabelWithSize:56 weight:NSFontWeightSemibold white:0.92];
+    self.status = [self shellLabelWithSize:22 weight:NSFontWeightRegular white:0.70];
+    self.infoLabel = [self shellLabelWithSize:18 weight:NSFontWeightRegular white:0.55];
+    self.permissionLabel = [self shellLabelWithSize:17 weight:NSFontWeightMedium white:1.0];
+    self.permissionLabel.textColor = [NSColor colorWithRed:1.0 green:0.72 blue:0.30 alpha:1.0];
+    self.hintLabel = [self shellLabelWithSize:14 weight:NSFontWeightRegular white:0.38];
+    self.toastLabel = [self shellLabelWithSize:20 weight:NSFontWeightMedium white:0.95];
+    self.toastLabel.hidden = YES;
+    self.statusKey = @"waiting_input";
+    [self refreshShellText];
     self.debugBar = [[NSView alloc] initWithFrame:NSZeroRect];
     self.debugBar.wantsLayer = YES;
     self.debugBar.layer.backgroundColor = [NSColor colorWithWhite:0.03 alpha:0.90].CGColor;
@@ -178,6 +256,7 @@ static uint64_t RVMonotonicMilliseconds(void) {
     }
     self.debugLines = lines;
     [self.window.contentView addSubview:self.debugBar];
+    [self layoutShell];
     [self layoutDebugBar];
     [self.window makeKeyAndOrderFront:nil];
 
@@ -194,24 +273,27 @@ static uint64_t RVMonotonicMilliseconds(void) {
 }
 
 - (void)requestCapturePermissions {
+    /* The system prompt sits below the shell's window level. Step back while
+     * it is on screen, otherwise nobody can answer it. */
     AVAuthorizationStatus camera = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
-    if (camera == AVAuthorizationStatusNotDetermined) {
-        [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
-            (void)granted;
-            dispatch_async(dispatch_get_main_queue(), ^{ [self requestCapturePermissions]; });
-        }];
-        return;
-    }
-    if (camera != AVAuthorizationStatusAuthorized) {
-        self.status.stringValue = @"请在系统设置中允许摄像头访问";
-        return;
-    }
     AVAuthorizationStatus microphone = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
-    if (microphone == AVAuthorizationStatusNotDetermined) {
-        [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
+    NSString *pending = camera == AVAuthorizationStatusNotDetermined ? AVMediaTypeVideo :
+        (camera == AVAuthorizationStatusAuthorized && microphone == AVAuthorizationStatusNotDetermined) ? AVMediaTypeAudio : nil;
+    if (pending) {
+        self.permissionPromptPending = YES;
+        [self updateVideoPresentation:self.showingVideo];
+        [AVCaptureDevice requestAccessForMediaType:pending completionHandler:^(BOOL granted) {
             (void)granted;
-            dispatch_async(dispatch_get_main_queue(), ^{ [self requestCapturePermissions]; });
+            dispatch_async(dispatch_get_main_queue(), ^{
+                self.permissionPromptPending = NO;
+                [self requestCapturePermissions];
+            });
         }];
+        return;
+    }
+    [self updateVideoPresentation:self.showingVideo];
+    if (camera != AVAuthorizationStatusAuthorized) {
+        [self showStatus:@"camera_denied" detail:nil];
         return;
     }
     [self findAndStartCapture];
@@ -249,7 +331,7 @@ static uint64_t RVMonotonicMilliseconds(void) {
     AVCaptureDevice *video = [self findDevice:AVMediaTypeVideo filter:self.videoFilter];
     if (!video) {
         if (self.session) [self stopCaptureSession];
-        self.status.stringValue = @"等待可识别的 HDMI/UVC 采集卡…";
+        [self showStatus:@"waiting_card" detail:nil];
         return;
     }
     CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
@@ -264,7 +346,7 @@ static uint64_t RVMonotonicMilliseconds(void) {
     NSError *error = nil;
     AVCaptureDeviceInput *videoInput = [AVCaptureDeviceInput deviceInputWithDevice:video error:&error];
     if (!videoInput) {
-        self.status.stringValue = [NSString stringWithFormat:@"视频设备无法打开：%@", error.localizedDescription];
+        [self showStatus:@"open_failed" detail:error.localizedDescription ?: @""];
         return;
     }
     AVCaptureSession *session = [AVCaptureSession new];
@@ -298,7 +380,7 @@ static uint64_t RVMonotonicMilliseconds(void) {
     self.lastFrame = 0;
     self.lastCaptureStart = now;
     self.showingVideo = NO;
-    self.status.stringValue = @"等待 HDMI 画面…";
+    [self showStatus:@"waiting_hdmi" detail:nil];
     [session startRunning];
     NSLog(@"Rescue video input: %@", video.localizedName);
 }
@@ -324,7 +406,7 @@ static uint64_t RVMonotonicMilliseconds(void) {
         if (![device.uniqueID isEqualToString:self.videoID] && ![device.uniqueID isEqualToString:self.audioID]) return;
         NSLog(@"Rescue video device disconnected: %@", device.localizedName);
         [self stopCaptureSession];
-        self.status.stringValue = @"等待可识别的 HDMI/UVC 采集卡…";
+        [self showStatus:@"waiting_card" detail:nil];
     });
 }
 
@@ -336,7 +418,7 @@ static uint64_t RVMonotonicMilliseconds(void) {
         if (session != self.session) return;
         NSLog(@"Rescue capture session failed: %@", error.localizedDescription ?: @"unknown error");
         [self stopCaptureSession];
-        self.status.stringValue = @"HDMI 采集暂不可用，正在重试…";
+        [self showStatus:@"capture_retry" detail:nil];
     });
 }
 
@@ -349,7 +431,7 @@ static uint64_t RVMonotonicMilliseconds(void) {
         self.captureInterrupted = YES;
         self.lastFrame = 0;
         [self updateVideoPresentation:NO];
-        self.status.stringValue = @"HDMI 采集暂时中断，等待恢复…";
+        [self showStatus:@"capture_interrupted" detail:nil];
     });
 }
 
@@ -362,7 +444,7 @@ static uint64_t RVMonotonicMilliseconds(void) {
         self.captureInterrupted = NO;
         self.lastFrame = 0;
         self.lastCaptureStart = 0;
-        self.status.stringValue = @"重新连接 HDMI 画面…";
+        [self showStatus:@"capture_reconnect" detail:nil];
         [self findAndStartCapture];
     });
 }
@@ -383,9 +465,21 @@ static uint64_t RVMonotonicMilliseconds(void) {
         dispatch_async(dispatch_get_main_queue(), ^{ [self networkSignalChanged:notification]; });
         return;
     }
+    const BOOL wasNetworkVisible = self.networkVisible;
     self.networkVisible = [notification.name isEqualToString:RVNetworkActiveNotification];
     BOOL wasManualRescue = self.manualRescue;
     self.manualRescue = [notification.userInfo[@"manualRescue"] boolValue];
+    NSDictionary *info = notification.userInfo;
+    id address = info[@"address"], language = info[@"language"];
+    id inputMonitoring = info[@"inputMonitoring"], accessibility = info[@"accessibility"];
+    if ([address isKindOfClass:NSString.class]) self.receiverAddress = address;
+    if ([language isKindOfClass:NSString.class]) self.receiverLanguage = language;
+    if ([inputMonitoring isKindOfClass:NSNumber.class]) self.receiverInputMonitoring = inputMonitoring;
+    if ([accessibility isKindOfClass:NSNumber.class]) self.receiverAccessibility = accessibility;
+    /* A new picture on either path ends a visit to the iMac desktop. */
+    if (self.networkVisible && !wasNetworkVisible) self.fullscreenDismissed = NO;
+    if (self.manualRescue != wasManualRescue)
+        [self showToast:[self text:self.manualRescue ? @"toast_rescue" : @"toast_network"]];
     self.debugBar.hidden = ![notification.userInfo[@"debugVisible"] boolValue];
     for (int i = 0; i < 2; ++i) {
         id text = notification.userInfo[i == 0 ? @"debugLine1" : @"debugLine2"];
@@ -409,6 +503,8 @@ static uint64_t RVMonotonicMilliseconds(void) {
     self.powerRequestID = nil;
     self.networkVisible = NO;
     self.manualRescue = NO;
+    self.receiverInputMonitoring = nil;
+    self.receiverAccessibility = nil;
     self.debugBar.hidden = YES;
     rv_display_signal_init(&_signalState);
     [self updateVideoPresentation:self.showingVideo];
@@ -456,30 +552,182 @@ static uint64_t RVMonotonicMilliseconds(void) {
         [self findAndStartCapture];
     }
     BOOL active = self.lastFrame > 0 && CFAbsoluteTimeGetCurrent() - self.lastFrame < 2.0;
+    if (self.returnWhenPermitted && [self missingPermissions].count == 0) {
+        self.returnWhenPermitted = NO;
+        self.fullscreenDismissed = NO;
+    }
     [self updateVideoPresentation:active];
+    /* Another app taking focus must not leave the shell without a keyboard. */
+    if (self.hdmiFullscreen && !NSApp.isActive) {
+        [NSApp activateIgnoringOtherApps:YES];
+        [self.window makeKeyAndOrderFront:nil];
+    }
 }
 
 - (void)showHDMIFullscreen:(id)sender {
     (void)sender;
     self.fullscreenDismissed = NO;
+    self.returnWhenPermitted = NO;
     [self updateVideoPresentation:self.showingVideo];
 }
 
+- (void)toggleNoSignalStandby:(id)sender {
+    (void)sender;
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    [defaults setInteger:[defaults integerForKey:RVNoSignalStandbyKey] > 0 ? 0 : 60 forKey:RVNoSignalStandbyKey];
+    [self refreshShellText];
+    [self updateVideoPresentation:self.showingVideo];
+}
+
+- (BOOL)chinese {
+    NSString *language = self.receiverLanguage.length ? self.receiverLanguage : NSLocale.preferredLanguages.firstObject;
+    return [language hasPrefix:@"zh"];
+}
+
+- (NSString *)text:(NSString *)key { return RVShellText(key, [self chinese]); }
+
+- (NSTextField *)shellLabelWithSize:(CGFloat)size weight:(NSFontWeight)weight white:(CGFloat)white {
+    NSTextField *label = [NSTextField labelWithString:@""];
+    label.textColor = [NSColor colorWithWhite:white alpha:1.0];
+    label.backgroundColor = NSColor.clearColor;
+    label.font = [NSFont systemFontOfSize:size weight:weight];
+    label.alignment = NSTextAlignmentCenter;
+    label.lineBreakMode = NSLineBreakByTruncatingMiddle;
+    [self.window.contentView addSubview:label];
+    return label;
+}
+
+- (void)layoutShell {
+    if (!self.window) return;
+    const NSRect bounds = self.window.contentView.bounds;
+    const CGFloat width = NSWidth(bounds), middle = NSMidY(bounds);
+    self.titleLabel.frame = NSMakeRect(0, middle + 24, width, 76);
+    self.status.frame = NSMakeRect(0, middle - 28, width, 34);
+    self.infoLabel.frame = NSMakeRect(0, middle - 70, width, 28);
+    self.permissionLabel.frame = NSMakeRect(0, middle - 112, width, 28);
+    self.hintLabel.frame = NSMakeRect(0, 36, width, 22);
+    self.toastLabel.frame = NSMakeRect(0, NSHeight(bounds) * 0.78, width, 32);
+}
+
+- (void)showStatus:(NSString *)key detail:(NSString *)detail {
+    self.statusKey = key;
+    self.statusDetail = detail;
+    [self refreshShellText];
+}
+
+- (void)showToast:(NSString *)message {
+    self.toastLabel.stringValue = message ?: @"";
+    self.toastLabel.hidden = NO;
+    const uint64_t generation = ++self.toastGeneration;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(RV_SHELL_EXIT_CONFIRM_MS * NSEC_PER_MSEC)),
+                   dispatch_get_main_queue(), ^{
+        if (self.toastGeneration == generation) self.toastLabel.hidden = YES;
+    });
+}
+
+/* Camera/microphone belong to this process. Input Monitoring and Accessibility
+ * belong to the Network Receiver, which reports them with its signal state. */
+- (NSArray<NSString *> *)missingPermissions {
+    NSMutableArray<NSString *> *missing = [NSMutableArray new];
+    if ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo] != AVAuthorizationStatusAuthorized)
+        [missing addObject:@"camera"];
+    if ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio] != AVAuthorizationStatusAuthorized)
+        [missing addObject:@"microphone"];
+    if (self.receiverInputMonitoring && !self.receiverInputMonitoring.boolValue) [missing addObject:@"input"];
+    if (self.receiverAccessibility && !self.receiverAccessibility.boolValue) [missing addObject:@"accessibility"];
+    return missing;
+}
+
+- (void)openPermissionSettings:(id)sender {
+    (void)sender;
+    NSString *first = [self missingPermissions].firstObject;
+    if (!first) return;
+    NSString *mediaType = [first isEqualToString:@"camera"] ? AVMediaTypeVideo :
+                          [first isEqualToString:@"microphone"] ? AVMediaTypeAudio : nil;
+    if (mediaType && [AVCaptureDevice authorizationStatusForMediaType:mediaType] == AVAuthorizationStatusNotDetermined) {
+        if (!self.permissionPromptPending) [self requestCapturePermissions];
+        return;
+    }
+    NSDictionary<NSString *, NSString *> *anchors = @{ @"camera": @"Privacy_Camera", @"microphone": @"Privacy_Microphone",
+        @"input": @"Privacy_ListenEvent", @"accessibility": @"Privacy_Accessibility" };
+    NSURL *url = [NSURL URLWithString:[@"x-apple.systempreferences:com.apple.preference.security?"
+        stringByAppendingString:anchors[first]]];
+    /* System Preferences needs the desktop; come back once nothing is missing. */
+    self.fullscreenDismissed = YES;
+    self.returnWhenPermitted = YES;
+    [self updateVideoPresentation:self.showingVideo];
+    if (url) [NSWorkspace.sharedWorkspace openURL:url];
+}
+
+- (void)refreshShellText {
+    self.titleLabel.stringValue = [self text:@"title_no_signal"];
+    NSString *status = [self text:self.statusKey ?: @"waiting_input"];
+    self.status.stringValue = self.statusDetail
+        ? [status stringByReplacingOccurrencesOfString:@"%@" withString:self.statusDetail] : status;
+    self.infoLabel.stringValue = self.receiverAddress.length
+        ? [[self text:@"address"] stringByReplacingOccurrencesOfString:@"%@" withString:self.receiverAddress] : @"";
+    NSMutableArray<NSString *> *names = [NSMutableArray new];
+    for (NSString *key in [self missingPermissions]) [names addObject:[self text:key]];
+    self.permissionLabel.stringValue = names.count
+        ? [[self text:@"permissions_missing"] stringByReplacingOccurrencesOfString:@"%@"
+              withString:[names componentsJoinedByString:@" · "]] : @"";
+    self.hintLabel.stringValue = [self text:@"hint"];
+    self.returnItem.title = [self text:@"menu_return"];
+    self.permissionsItem.title = [self text:@"menu_permissions"];
+    self.permissionsItem.hidden = names.count == 0;
+    self.standbyItem.title = [self text:@"menu_standby"];
+    self.standbyItem.state = [NSUserDefaults.standardUserDefaults integerForKey:RVNoSignalStandbyKey] > 0
+        ? NSControlStateValueOn : NSControlStateValueOff;
+}
+
+- (void)coverScreen {
+    self.savedPresentationOptions = NSApp.presentationOptions;
+    [self.window setFrame:(self.window.screen ?: NSScreen.mainScreen).frame display:YES];
+    [self layoutShell];
+    self.window.level = NSStatusWindowLevel + 1;
+    [NSApp activateIgnoringOtherApps:YES];
+    NSApp.presentationOptions = NSApplicationPresentationHideDock | NSApplicationPresentationHideMenuBar;
+    [self.window makeKeyAndOrderFront:nil];
+}
+
+- (void)uncoverScreen {
+    NSApp.presentationOptions = self.savedPresentationOptions;
+    self.window.level = NSNormalWindowLevel - 1;
+    [self.window orderBack:nil];
+}
+
+/* YES covers the whole screen above the Dock and menu bar, with HDMI video or
+ * the no-signal page. */
 - (void)presentHDMIFullscreen:(BOOL)fullscreen {
     if (!self.window || fullscreen == self.hdmiFullscreen) return;
     self.hdmiFullscreen = fullscreen;
-    if (fullscreen) {
-        self.savedPresentationOptions = NSApp.presentationOptions;
-        [self.window setFrame:(self.window.screen ?: NSScreen.mainScreen).frame display:YES];
-        self.window.level = NSStatusWindowLevel + 1;
-        [NSApp activateIgnoringOtherApps:YES];
-        NSApp.presentationOptions = NSApplicationPresentationHideDock | NSApplicationPresentationHideMenuBar;
-        [self.window makeKeyAndOrderFront:nil];
-    } else {
-        NSApp.presentationOptions = self.savedPresentationOptions;
-        self.window.level = NSNormalWindowLevel - 1;
-        [self.window orderBack:nil];
-    }
+    self.exitArmedMs = 0;
+    const uint64_t generation = ++self.presentationGeneration;
+    if (fullscreen) { [self coverScreen]; return; }
+    if (self.shellView != RV_SHELL_VIEW_NETWORK) { [self uncoverScreen]; return; }
+    /* Stay in front until the network window has taken the screen, so the
+     * handoff never shows the desktop underneath. */
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(RV_SHELL_NETWORK_HANDOFF_MS * NSEC_PER_MSEC)),
+                   dispatch_get_main_queue(), ^{
+        if (self.presentationGeneration == generation && !self.hdmiFullscreen) [self uncoverScreen];
+    });
+}
+
+- (void)requestNoSignalStandby {
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        pid_t pid = 0;
+        char *argv[] = { "/usr/bin/pmset", "displaysleepnow", NULL };
+        if (posix_spawn(&pid, argv[0], NULL, NULL, argv, environ) == 0) {
+            int status = 0;
+            pid_t waited;
+            do { waited = waitpid(pid, &status, 0); } while (waited < 0 && errno == EINTR);
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            /* A picture that arrived meanwhile wakes the panel again here. */
+            self.displaySleeping = YES;
+            [self updateVideoPresentation:self.showingVideo];
+        });
+    });
 }
 
 - (void)updateVideoPresentation:(BOOL)active {
@@ -489,19 +737,26 @@ static uint64_t RVMonotonicMilliseconds(void) {
     self.lastPowerMode = power;
     unsigned int sources = rv_display_signal_active_sources(&_signalState, now);
     if (!self.networkVisible) sources &= ~RV_DISPLAY_SIGNAL_NETWORK;
-    const BOOL hdmiVisible = active && (sources & RV_DISPLAY_SIGNAL_HDMI_FRAMES) &&
-        !(sources & RV_DISPLAY_SIGNAL_NETWORK) && power != RV_POWER_MANUAL_OFF;
-    if (!active && !self.manualRescue) self.fullscreenDismissed = NO;
-    [self presentHDMIFullscreen:(hdmiVisible || (self.manualRescue && power != RV_POWER_MANUAL_OFF)) && !self.fullscreenDismissed];
-    const BOOL anyInput = !self.fullscreenDismissed && sources != RV_DISPLAY_SIGNAL_NONE;
+    /* The shell covers the screen whenever the network stream is not on it,
+     * including while the panel is off: a stray wake must not show the desktop. */
+    const enum rv_shell_view view = rv_shell_view_for(sources, active, self.manualRescue,
+        self.fullscreenDismissed || self.permissionPromptPending);
+    self.shellView = view;
+    [self presentHDMIFullscreen:rv_shell_view_covers(view)];
+    if (view != RV_SHELL_VIEW_NO_SIGNAL) { self.noSignalSinceMs = 0; self.standbyRequested = NO; }
+    else if (!self.noSignalSinceMs) self.noSignalSinceMs = now ? now : 1;
+    const BOOL anyInput = view != RV_SHELL_VIEW_DESKTOP;
     self.audioPreview.volume = rv_display_signal_hdmi_audio_allowed(sources) ? 1.0f : 0.0f;
     int cursorAction = rv_display_cursor_action(self.cursorHidden, anyInput);
     if (cursorAction > 0 && CGDisplayHideCursor(CGMainDisplayID()) == kCGErrorSuccess) self.cursorHidden = YES;
     if (cursorAction < 0 && CGDisplayShowCursor(CGMainDisplayID()) == kCGErrorSuccess) self.cursorHidden = NO;
     self.showingVideo = active;
-    self.status.hidden = active || (sources & RV_DISPLAY_SIGNAL_NETWORK) != 0;
-    if (self.manualRescue && !active) self.status.stringValue = @"手动 Rescue：等待 HDMI/UVC 输入…（R 返回串流）";
-    if (active) self.status.stringValue = @"救援锁定：保持亮屏，等待 HDMI / 网络画面…";
+    const BOOL pageHidden = active || (sources & RV_DISPLAY_SIGNAL_NETWORK) != 0;
+    self.titleLabel.hidden = self.status.hidden = self.infoLabel.hidden = pageHidden;
+    self.permissionLabel.hidden = self.hintLabel.hidden = pageHidden;
+    if (!pageHidden) [self refreshShellText];
+    if (self.manualRescue && !active) [self showStatus:@"manual_rescue" detail:nil];
+    if (active) [self showStatus:@"waiting_any" detail:nil];
 
     if (power == RV_POWER_MANUAL_OFF) {
         self.holdingDisplayAwake = NO;
@@ -510,6 +765,27 @@ static uint64_t RVMonotonicMilliseconds(void) {
             self.displayAssertion = kIOPMNullAssertionID;
         }
         return; /* Frames/HDMI reconnects cannot override explicit off. */
+    }
+    const uint64_t standbyMs = (uint64_t)MAX((NSInteger)0,
+        [NSUserDefaults.standardUserDefaults integerForKey:RVNoSignalStandbyKey]) * 1000ULL;
+    if (standbyMs && view == RV_SHELL_VIEW_NO_SIGNAL) {
+        const uint64_t idleMs = (uint64_t)(CGEventSourceSecondsSinceLastEventType(
+            kCGEventSourceStateCombinedSessionState, kCGAnyInputEventType) * 1000.0);
+        if (rv_shell_no_signal_should_sleep(self.noSignalSinceMs, now, idleMs, standbyMs)) {
+            /* Monitor-style standby: only the panel sleeps. HDMI or network
+             * frames, or the iMac's own keyboard/mouse, light it again. */
+            self.holdingDisplayAwake = NO;
+            if (self.displayAssertion != kIOPMNullAssertionID) {
+                IOPMAssertionRelease(self.displayAssertion);
+                self.displayAssertion = kIOPMNullAssertionID;
+            }
+            if (!self.standbyRequested && !self.displaySleepPending) {
+                self.standbyRequested = YES;
+                [self requestNoSignalStandby];
+            }
+            return;
+        }
+        self.standbyRequested = NO;
     }
     const BOOL needsWake = enteredRescue || !self.holdingDisplayAwake || self.displaySleeping;
     if (self.displayAssertion == kIOPMNullAssertionID) {
@@ -524,7 +800,8 @@ static uint64_t RVMonotonicMilliseconds(void) {
         self.displaySleeping = NO;
     }
     self.holdingDisplayAwake = self.displayAssertion != kIOPMNullAssertionID;
-    /* No timeout, old LKG preference or HDMI content heuristic can sleep here. */
+    /* Only the opt-in no-signal standby above can sleep here: no old LKG
+     * preference and no HDMI content heuristic. */
 }
 
 - (void)requestDisplaySleepAt:(uint64_t)now requestID:(NSString *)requestID issuedMs:(uint64_t)issuedMs {
@@ -575,6 +852,7 @@ static uint64_t RVMonotonicMilliseconds(void) {
 - (void)windowDidResize:(NSNotification *)notification {
     (void)notification;
     self.preview.frame = self.window.contentView.bounds;
+    [self layoutShell];
     [self layoutDebugBar];
 }
 

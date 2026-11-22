@@ -76,12 +76,24 @@ int main(void) { @autoreleasepool {
     rv_display_signal_init(&state); c.signalState = state;
     [c updateVideoPresentation:NO];
     assert(c.holdingDisplayAwake && assertionCreates == 1 && wakes == 1);
+    /* No picture on either input: the shell covers the screen, not the desktop. */
+    assert(c.presentedFullscreen && c.shellView == RV_SHELL_VIEW_NO_SIGNAL && c.cursorHidden);
+    c.permissionPromptPending = YES; /* A system prompt must stay reachable. */
+    [c updateVideoPresentation:NO];
+    assert(!c.presentedFullscreen && !c.cursorHidden);
+    c.permissionPromptPending = NO;
+    c.fullscreenDismissed = YES; /* Explicit exit survives the lack of HDMI. */
+    [c updateVideoPresentation:NO];
+    assert(!c.presentedFullscreen && c.shellView == RV_SHELL_VIEW_DESKTOP);
+    [c showHDMIFullscreen:nil];
+    assert(c.presentedFullscreen);
     request(c, @"future", NO, RVMonotonicMilliseconds() + 10000);
     request(c, @"expired", NO, RVMonotonicMilliseconds() - 6000);
     assert(c.replies.count == 0 && !c.signalState.manual_off);
 
     request(c, @"off", NO, RVMonotonicMilliseconds()); finish(c);
     assert(c.signalState.manual_off && c.displaySleeping && !c.holdingDisplayAwake);
+    assert(c.presentedFullscreen); /* Still covered while the panel is off. */
     assert(assertionReleases == 1 && [c.replies.lastObject[@"accepted"] boolValue]);
     request(c, @"wake", YES, RVMonotonicMilliseconds());
     assert(!c.signalState.manual_off && !c.displaySleeping && c.holdingDisplayAwake);
@@ -125,8 +137,10 @@ int main(void) { @autoreleasepool {
     assert(c.signalState.rescue_locked && !c.networkVisible && audio.volume == 1.0f);
     NSNotification *active = [NSNotification notificationWithName:RVNetworkActiveNotification object:nil
         userInfo:@{@"frameMs":@(RVMonotonicMilliseconds())}];
+    c.fullscreenDismissed = YES;
     [c networkSignalChanged:active];
     assert(c.networkVisible && audio.volume == 0.0f && !c.presentedFullscreen);
+    assert(!c.fullscreenDismissed && c.shellView == RV_SHELL_VIEW_NETWORK); /* A new stream ends the desktop visit. */
     [c networkSignalChanged:[NSNotification notificationWithName:RVNetworkInactiveNotification object:nil]];
     assert(!c.networkVisible && c.signalState.rescue_locked && audio.volume == 1.0f && c.presentedFullscreen);
     unsigned before = wakes;

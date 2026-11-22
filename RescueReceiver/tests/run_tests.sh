@@ -7,3 +7,6 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror \
   "$ROOT/DisplaySignalState.c" "$ROOT/tests/test_display_signal_state.c" \
   -o "$BIN"
 "$BIN"
+${CC:-cc} -std=c11 -Wall -Wextra -Werror \
+  "$ROOT/tests/test_shell_presentation.c" -o "$BIN"
+"$BIN"
