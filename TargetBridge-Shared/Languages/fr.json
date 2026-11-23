@@ -323,5 +323,14 @@
   "sender.receiver_update.invalid_request": "Demande invalide. Sélectionnez à nouveau le paquet.",
   "sender.media.install_speaker": "Installer les haut-parleurs iMac…",
   "sender.media.speaker_hint": "Après l’installation, redémarrez ce Mac et sélectionnez ReVoyage — iMac Speakers comme sortie audio. Les haut-parleurs locaux et le casque restent sur ce Mac.",
+  "sender.media.speaker": "Haut-parleurs",
+  "sender.media.endpoint.signing_required": "Nécessite une version signée Developer ID pour être enregistré sur ce Mac.",
+  "sender.media.endpoint.not_installed": "Périphérique virtuel non installé sur ce Mac.",
+  "sender.media.endpoint.disconnected": "Non connecté à l’iMac.",
+  "sender.media.endpoint.unavailable": "L’iMac ne signale aucun périphérique de ce type.",
+  "sender.media.endpoint.permission_pending": "L’iMac demandera l’accès lors de l’activation.",
+  "sender.media.endpoint.permission_denied": "Accès refusé sur l’iMac. Vérifiez ses réglages de confidentialité.",
+  "sender.media.endpoint.inactive": "Prêt, non utilisé.",
+  "sender.media.endpoint.active": "En cours d’utilisation.",
   "sender.media.devices.speaker_restart_required": "Haut-parleurs iMac installés. Redémarrez macOS puis sélectionnez ReVoyage — iMac Speakers comme sortie audio."
 }

@@ -179,7 +179,7 @@ final class TBDisplaySenderService: ObservableObject {
         guard !interface.isEmpty, allocation.isValid(capacity: capacity),
               videoLinkBudgets[interface]?.videoReservations.isEmpty ?? true,
               videoLinkBudgets[interface]?.cableTester == nil,
-              TBMediaBridge.shared.state == "disconnected",
+              TBMediaBridge.shared.state == .disconnected,
               !sessions.contains(where: { $0.isConnected || $0.isStreaming }) else { return false }
         guard setVideoLinkCapacity(capacity, for: interface) else { return false }
         bandwidthAllocations[interface] = allocation

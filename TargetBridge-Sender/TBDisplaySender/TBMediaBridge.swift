@@ -4,7 +4,7 @@ import Observation
 import Security
 
 private final class TBMediaTransport: @unchecked Sendable {
-    enum Event: Sendable { case connected, registry(TBMediaRegistry), status(TBMediaStatus), failed(String) }
+    enum Event: Sendable { case connected, registry(TBMediaRegistry), status(TBMediaStatus), failed(TBMediaBridgeState) }
     // Also serializes native camera queues and HAL writes across reconnects.
     static let queue = DispatchQueue(label: "com.revoyage.sender.media", qos: .userInitiated)
     let connection: NWConnection
@@ -34,7 +34,7 @@ private final class TBMediaTransport: @unchecked Sendable {
                 guard let self, !self.cancelled else { return }
                 switch state {
                 case .ready: self.receive()
-                case .failed: self.fail("connection_failed")
+                case .failed: self.fail(.connectionFailed)
                 default: break
                 }
             }
@@ -43,7 +43,7 @@ private final class TBMediaTransport: @unchecked Sendable {
             timer.schedule(deadline: .now() + 2, repeating: 2)
             timer.setEventHandler { [weak self] in
                 guard let self, !self.cancelled else { return }
-                if ProcessInfo.processInfo.systemUptime > self.deadline { self.fail("connection_timeout"); return }
+                if ProcessInfo.processInfo.systemUptime > self.deadline { self.fail(.connectionTimeout); return }
                 if self.authenticated { self.send(.heartbeat) }
             }
             self.timer = timer; timer.resume()
@@ -55,26 +55,26 @@ private final class TBMediaTransport: @unchecked Sendable {
         timer?.cancel(); timer = nil; connection.stateUpdateHandler = nil; connection.cancel()
         buffer.removeAll(); tb_virtual_camera_stop(); tb_virtual_microphone_stop()
     }
-    private func fail(_ error: String) { guard !cancelled else { return }; finish(); event(.failed(error)) }
+    private func fail(_ error: TBMediaBridgeState) { guard !cancelled else { return }; finish(); event(.failed(error)) }
     private func send(_ type: TBMediaPacket, _ payload: Data = Data()) {
         guard !cancelled else { return }
         connection.send(content: TBMediaProtocol.packet(type, payload), completion: .contentProcessed { [weak self] error in
-            if error != nil { self?.fail("connection_failed") }
+            if error != nil { self?.fail(.connectionFailed) }
         })
     }
     func configure(camera: String?, microphone: String?, cameraMbps: Double) {
         Self.queue.async { [self] in
             guard authenticated, !cancelled, !sequenceGate.awaitingConfiguration else { return }
-            guard supportsBandwidthLimit || camera == nil || cameraMbps == 25 else { fail("bandwidth_unsupported"); return }
+            guard supportsBandwidthLimit || camera == nil || cameraMbps == 25 else { fail(.bandwidthUnsupported); return }
             cameraEnabled = false; microphoneEnabled = false
             tb_virtual_camera_stop(); tb_virtual_microphone_stop()
-            if camera != nil && tb_virtual_camera_start() != 0 { fail("camera_unavailable"); return }
-            if microphone != nil && tb_virtual_microphone_start() != 0 { fail("microphone_unavailable"); return }
+            if camera != nil && tb_virtual_camera_start() != 0 { fail(.cameraUnavailable); return }
+            if microphone != nil && tb_virtual_microphone_start() != 0 { fail(.microphoneUnavailable); return }
             wantedCamera = camera != nil; wantedMicrophone = microphone != nil
             sequenceGate.beginConfiguration()
             deadline = ProcessInfo.processInfo.systemUptime + 130
             do { send(.request, try JSONEncoder().encode(TBMediaRequest(cameraID: camera, microphoneID: microphone, cameraMbps: supportsBandwidthLimit ? cameraMbps : nil))) }
-            catch { fail("invalid_media") }
+            catch { fail(.invalidMedia) }
         }
     }
     private func receive() {
@@ -84,9 +84,9 @@ private final class TBMediaTransport: @unchecked Sendable {
                 self.buffer.append(data)
                 do {
                     while let (type, payload) = try TBMediaProtocol.drain(&self.buffer) { try self.handle(type, payload) }
-                } catch { self.fail("invalid_media"); return }
+                } catch { self.fail(.invalidMedia); return }
             }
-            if error != nil || complete { self.fail("connection_failed"); return }
+            if error != nil || complete { self.fail(.connectionFailed); return }
             self.receive()
         }
     }
@@ -129,7 +129,7 @@ private final class TBMediaTransport: @unchecked Sendable {
             if microphoneEnabled {
                 let pcm = data.dropFirst(8)
                 let result = pcm.withUnsafeBytes { tb_virtual_microphone_push_pcm($0.bindMemory(to: UInt8.self).baseAddress, pcm.count) }
-                if result != 0 { fail("microphone_unavailable") }
+                if result != 0 { fail(.microphoneUnavailable) }
             }
         default: throw TBMediaProtocol.Failure.invalidPacket
         }
@@ -140,15 +140,15 @@ private final class TBMediaTransport: @unchecked Sendable {
 final class TBMediaBridge {
     static let shared = TBMediaBridge()
     var host = UserDefaults.standard.string(forKey: "com.revoyage.sender.pairing-host.v2") ?? ""
-    private(set) var state = "disconnected"
+    private(set) var state = TBMediaBridgeState.disconnected
     private(set) var devices: [TBMediaDevice] = []
     private(set) var cameras: [TBMediaDevice] = []
     private(set) var microphones: [TBMediaDevice] = []
     private(set) var cameraID: String?
     private(set) var microphoneID: String?
     private(set) var requestPending = false
-    private(set) var cameraPermission = "notDetermined"
-    private(set) var microphonePermission = "notDetermined"
+    private(set) var cameraPermission = TBMediaPermission.notDetermined
+    private(set) var microphonePermission = TBMediaPermission.notDetermined
     @ObservationIgnored private var transport: TBMediaTransport?
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var bandwidthInterface = ""
@@ -156,9 +156,9 @@ final class TBMediaBridge {
     func connect() {
         disconnect()
         let host = host.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !host.isEmpty else { state = "receiver_required"; return }
+        guard !host.isEmpty else { state = .receiverRequired; return }
         let key = TBReceiverPairingCredential.localConnectionCode
-        self.host = host; state = "connecting"; let attempt = generation
+        self.host = host; state = .connecting; let attempt = generation
         let transport: TBMediaTransport
         do {
             let link = try TBWiredConnection.select(host: host, localIP: TBDisplaySenderService.shared.wiredLocalIP(forReceiver: host), links: TBWiredConnection.currentLinks())
@@ -167,24 +167,24 @@ final class TBMediaBridge {
             Task { @MainActor [weak self] in
                 guard let self, self.generation == attempt else { return }
                 switch event {
-                case .connected: self.state = "connected"
+                case .connected: self.state = .connected
                 case .registry(let registry):
-                    self.devices = registry.devices; self.cameraPermission = registry.cameraPermission
+                    self.devices = registry.devices; self.cameraPermission = TBMediaPermission(wire: registry.cameraPermission)
                     self.cameras = registry.devices.filter { $0.kind == "camera" }
                     self.microphones = registry.devices.filter { $0.kind == "microphone" }
-                    self.microphonePermission = registry.microphonePermission
+                    self.microphonePermission = TBMediaPermission(wire: registry.microphonePermission)
                 case .status(let status):
-                    if status.error == "permission_pending" { self.state = "permission_pending"; return }
+                    if status.error == "permission_pending" { self.state = .permissionPending; return }
                     self.requestPending = false
                     if !status.cameraActive { self.cameraID = nil }; if !status.microphoneActive { self.microphoneID = nil }
-                    self.state = status.error.isEmpty ? "connected" : status.error
+                    self.state = TBMediaBridgeState(statusError: status.error)
                 case .failed(let error):
                     self.transport = nil; self.devices = []; self.cameras = []; self.microphones = []; self.cameraID = nil; self.microphoneID = nil
                     self.requestPending = false; self.state = error
                 }
             }
         }) } catch {
-            state = error as? TBWiredConnection.Failure == .linkTooSlow ? "link_too_slow" : "wired_required"; return
+            state = error as? TBWiredConnection.Failure == .linkTooSlow ? .linkTooSlow : .wiredRequired; return
         }
         self.transport = transport; transport.start()
     }
@@ -201,6 +201,6 @@ final class TBMediaBridge {
     }
     func disconnect() {
         generation = UUID(); transport?.stop(); transport = nil; devices = []; cameras = []; microphones = []
-        cameraID = nil; microphoneID = nil; requestPending = false; state = "disconnected"
+        cameraID = nil; microphoneID = nil; requestPending = false; state = .disconnected
     }
 }

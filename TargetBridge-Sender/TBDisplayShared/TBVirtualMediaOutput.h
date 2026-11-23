@@ -8,4 +8,10 @@ int tb_virtual_camera_push_jpeg(const uint8_t *bytes, size_t size);
 int tb_virtual_microphone_start(void);
 void tb_virtual_microphone_stop(void);
 int tb_virtual_microphone_push_pcm(const uint8_t *bytes, size_t size);
+/* Read-only probes for the status UI; safe on any thread. 1 = present. */
+int tb_virtual_camera_present(void);
+int tb_virtual_microphone_present(void);
+int tb_virtual_speaker_present(void);
+/* 1 when the iMac speaker device is the default system output. */
+int tb_virtual_speaker_selected(void);
 #endif

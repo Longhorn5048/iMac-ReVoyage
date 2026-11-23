@@ -49,7 +49,7 @@ struct TBBandwidthSettingsView: View {
                     feedback = service.applyBandwidth(allocation, capacity: capacity, for: interface)
                         ? "sender.bandwidth.applied" : "sender.bandwidth.rejected"
                 }.buttonStyle(.borderedProminent)
-                    .disabled(interface.isEmpty || !allocation.isValid(capacity: capacity) || service.anyConnected || TBMediaBridge.shared.state != "disconnected")
+                    .disabled(interface.isEmpty || !allocation.isValid(capacity: capacity) || service.anyConnected || TBMediaBridge.shared.state != .disconnected)
                 if !feedback.isEmpty { Text(TBDisplaySenderL10n.text(feedback, service.language)).font(.footnote) }
             }
             ForEach(service.sessions) { session in
