@@ -74,6 +74,27 @@ final class TBCaptureContinuityTests: XCTestCase {
         XCTAssertFalse(state.needsResume, "Explicit Stop while asleep must stay stopped")
     }
 
+    func testBackgroundWakeKeepsSessionAsleepUntilScreensWake() {
+        var state = TBSenderSleepState()
+        state.sleep(system: false, activeSession: true)
+        state.sleep(system: true, activeSession: true)
+        XCTAssertFalse(state.wake(system: true, displaysAwake: false), "A dark wake must not light the iMac")
+        XCTAssertTrue(state.isSleeping)
+        XCTAssertTrue(state.needsResume)
+        state.sleep(system: true, activeSession: true)
+        XCTAssertFalse(state.wake(system: true, displaysAwake: false))
+        XCTAssertTrue(state.wake(system: false), "The real screen wake resumes the session")
+        XCTAssertFalse(state.isSleeping)
+    }
+
+    func testForcedSleepWithoutScreenNotificationStaysAsleepInBackgroundWake() {
+        var state = TBSenderSleepState()
+        state.sleep(system: true, activeSession: true)
+        XCTAssertFalse(state.wake(system: true, displaysAwake: false))
+        XCTAssertTrue(state.screensSleeping)
+        XCTAssertTrue(state.wake(system: true, displaysAwake: true))
+    }
+
     func testInactiveSleepDoesNotCreateAnAutomaticConnection() {
         var state = TBSenderSleepState()
         state.sleep(system: false, activeSession: false)

@@ -3,6 +3,7 @@
 #define CGDisplayHideCursor rv_test_hide_cursor
 #define CGDisplayShowCursor rv_test_show_cursor
 #define main rv_unused_rescue_main
+#define CGEventSourceSecondsSinceLastEventType rv_test_hid_idle
 #define IOPMAssertionCreateWithName rv_test_assertion_create
 #define IOPMAssertionDeclareUserActivity rv_test_user_activity
 #define IOPMAssertionRelease rv_test_assertion_release
@@ -16,6 +17,10 @@
 static unsigned assertionCreates, assertionReleases, wakes;
 CGError rv_test_hide_cursor(CGDirectDisplayID display) { (void)display; return kCGErrorSuccess; }
 CGError rv_test_show_cursor(CGDirectDisplayID display) { (void)display; return kCGErrorSuccess; }
+CFTimeInterval rv_test_hid_idle(CGEventSourceStateID state, CGEventType type) {
+    (void)state; (void)type;
+    return 3600; /* Nobody is at the iMac. */
+}
 static atomic_int spawnResult, waitDelayMs;
 IOReturn rv_test_assertion_create(CFStringRef type, IOPMAssertionLevel level,
     CFStringRef name, IOPMAssertionID *id) {
@@ -76,12 +81,24 @@ int main(void) { @autoreleasepool {
     rv_display_signal_init(&state); c.signalState = state;
     [c updateVideoPresentation:NO];
     assert(c.holdingDisplayAwake && assertionCreates == 1 && wakes == 1);
+    /* No picture on either input: the shell covers the screen, not the desktop. */
+    assert(c.presentedFullscreen && c.shellView == RV_SHELL_VIEW_NO_SIGNAL && c.cursorHidden);
+    c.permissionPromptPending = YES; /* A system prompt must stay reachable. */
+    [c updateVideoPresentation:NO];
+    assert(!c.presentedFullscreen && !c.cursorHidden);
+    c.permissionPromptPending = NO;
+    c.fullscreenDismissed = YES; /* Explicit exit survives the lack of HDMI. */
+    [c updateVideoPresentation:NO];
+    assert(!c.presentedFullscreen && c.shellView == RV_SHELL_VIEW_DESKTOP);
+    [c showHDMIFullscreen:nil];
+    assert(c.presentedFullscreen);
     request(c, @"future", NO, RVMonotonicMilliseconds() + 10000);
     request(c, @"expired", NO, RVMonotonicMilliseconds() - 6000);
     assert(c.replies.count == 0 && !c.signalState.manual_off);
 
     request(c, @"off", NO, RVMonotonicMilliseconds()); finish(c);
     assert(c.signalState.manual_off && c.displaySleeping && !c.holdingDisplayAwake);
+    assert(c.presentedFullscreen); /* Still covered while the panel is off. */
     assert(assertionReleases == 1 && [c.replies.lastObject[@"accepted"] boolValue]);
     request(c, @"wake", YES, RVMonotonicMilliseconds());
     assert(!c.signalState.manual_off && !c.displaySleeping && c.holdingDisplayAwake);
@@ -125,8 +142,10 @@ int main(void) { @autoreleasepool {
     assert(c.signalState.rescue_locked && !c.networkVisible && audio.volume == 1.0f);
     NSNotification *active = [NSNotification notificationWithName:RVNetworkActiveNotification object:nil
         userInfo:@{@"frameMs":@(RVMonotonicMilliseconds())}];
+    c.fullscreenDismissed = YES;
     [c networkSignalChanged:active];
     assert(c.networkVisible && audio.volume == 0.0f && !c.presentedFullscreen);
+    assert(!c.fullscreenDismissed && c.shellView == RV_SHELL_VIEW_NETWORK); /* A new stream ends the desktop visit. */
     [c networkSignalChanged:[NSNotification notificationWithName:RVNetworkInactiveNotification object:nil]];
     assert(!c.networkVisible && c.signalState.rescue_locked && audio.volume == 1.0f && c.presentedFullscreen);
     unsigned before = wakes;
@@ -151,5 +170,22 @@ int main(void) { @autoreleasepool {
     [c networkSignalChanged:manual];
     [c receiverRestarted:nil];
     assert(!c.manualRescue);
+    /* Opt-in no-signal standby turns the panel off; an explicit wake during
+     * it must light the panel and be accepted before any picture arrives. */
+    atomic_store(&waitDelayMs, 0);
+    [NSUserDefaults.standardUserDefaults setInteger:1 forKey:RVNoSignalStandbyKey];
+    [c updateVideoPresentation:NO];
+    assert(c.shellView == RV_SHELL_VIEW_NO_SIGNAL && c.holdingDisplayAwake);
+    c.noSignalSinceMs = RVMonotonicMilliseconds() - 5000;
+    [c updateVideoPresentation:NO];
+    assert(!c.holdingDisplayAwake && c.standbyRequested && c.presentedFullscreen);
+    CFAbsoluteTime standbyDeadline = CFAbsoluteTimeGetCurrent() + 2;
+    while (!c.displaySleeping && CFAbsoluteTimeGetCurrent() < standbyDeadline)
+        CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.01, true);
+    assert(c.displaySleeping && !c.holdingDisplayAwake);
+    request(c, @"standby-wake", YES, RVMonotonicMilliseconds());
+    assert(c.holdingDisplayAwake && !c.displaySleeping && !c.standbyRequested);
+    assert([c.replies.lastObject[@"accepted"] boolValue]);
+    [NSUserDefaults.standardUserDefaults removeObjectForKey:RVNoSignalStandbyKey];
     puts("Rescue controller: off/wake, failure, expiry, stale completion and restart safety passed (all power calls stubbed)");
 } return 0; }

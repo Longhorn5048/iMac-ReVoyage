@@ -17,6 +17,16 @@ jobs:
         run: scripts/build_distribution.sh
       - name: Run core reliability checks
         run: scripts/check_distribution.sh
+      - name: Show build logs on failure
+        if: failure()
+        run: |
+          for log in build/*.log; do
+            [ -f "$log" ] || continue
+            echo "::group::$log"
+            grep -n -E "error:|\*\* .* FAILED" "$log" | head -n 80 || true
+            tail -n 40 "$log"
+            echo "::endgroup::"
+          done
       - uses: actions/upload-artifact@v7
         with:
           name: ReVoyage-Preview

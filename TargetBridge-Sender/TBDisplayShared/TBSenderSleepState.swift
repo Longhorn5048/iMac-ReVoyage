@@ -16,9 +16,13 @@ struct TBSenderSleepState {
 
     /// Returns true only for a transition out of sleep; unlock notifications
     /// must not trigger a second restart or override a manual display-off.
-    mutating func wake(system: Bool) -> Bool {
+    ///
+    /// A system power-on also fires for background (dark) wakes, where the
+    /// panels stay off. `displaysAwake == false` keeps the session asleep so
+    /// the iMac is not lit for a picture that will not come.
+    mutating func wake(system: Bool, displaysAwake: Bool = true) -> Bool {
         let wasSleeping = isSleeping
-        if system { systemSleeping = false; screensSleeping = false }
+        if system { systemSleeping = false; screensSleeping = !displaysAwake }
         else { screensSleeping = false }
         return wasSleeping && !isSleeping
     }
