@@ -6,7 +6,7 @@ struct TBDisplaySenderApp: App {
     private let statusItemController = TBDisplaySenderStatusItemController(service: TBDisplaySenderService.shared)
 
     var body: some Scene {
-        WindowGroup("TargetBridge", id: "main") {
+        WindowGroup("iMac ReVoyage", id: "main") {
             TBSenderMainWindow(service: service, statusItemController: statusItemController)
                 .frame(minWidth: 540)
                 .task {
