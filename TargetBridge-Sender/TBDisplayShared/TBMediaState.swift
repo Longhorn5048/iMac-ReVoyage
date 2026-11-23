@@ -78,7 +78,9 @@ enum TBMediaEndpointStatus: String, CaseIterable, Sendable {
     /// Camera or microphone: an iMac capture device feeding a Sender virtual device.
     static func capture(installed: Bool, signingConfigured: Bool, linked: Bool, deviceCount: Int,
                         permission: TBMediaPermission, active: Bool) -> Self {
-        if !installed { return signingConfigured ? .notInstalled : .signingRequired }
+        // The virtual devices only accept frames from a Sender signed by their own team.
+        if !signingConfigured { return .signingRequired }
+        if !installed { return .notInstalled }
         if !linked { return .disconnected }
         if active { return .active }
         if permission == .denied || permission == .restricted { return .permissionDenied }

@@ -42,8 +42,9 @@ final class TBMediaStateTests: XCTestCase {
         XCTAssertEqual(status(permission: .notDetermined), .permissionPending)
         XCTAssertEqual(status(), .inactive)
         XCTAssertEqual(status(active: true), .active)
-        // An installed device works even when this build itself is unsigned.
-        XCTAssertEqual(status(signed: false), .inactive)
+        // Devices left by a signed build reject an unsigned Sender.
+        XCTAssertEqual(status(signed: false), .signingRequired)
+        XCTAssertEqual(status(signed: false, active: true), .signingRequired)
     }
 
     func testSpeakerEndpointStatus() {
